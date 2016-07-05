@@ -279,7 +279,6 @@ void dda_create(DDA *dda, const TARGET *target) {
       dda->fast_axis = i;
       dda->total_steps = dda->delta[i];
       dda->fast_um = delta_um[i];
-      dda->fast_spm = pgm_read_dword(&steps_per_m_P[i]);
     }
   }
 
@@ -429,7 +428,7 @@ void dda_create(DDA *dda, const TARGET *target) {
       // Acceleration ramps are based on the fast axis, not the combined speed.
       dda->rampup_steps =
         acc_ramp_len(muldiv(dda->fast_um, dda->endpoint.F, distance),
-                     dda->fast_spm);
+                     dda->fast_axis);
 
       if (dda->rampup_steps > dda->total_steps / 2)
         dda->rampup_steps = dda->total_steps / 2;
