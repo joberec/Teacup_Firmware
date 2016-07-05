@@ -256,9 +256,22 @@ const uint8_t msbloc (uint32_t v) {
   return 0;
 }
 
+/*!
+  Pre-calculated constant values for acceleration ramp calculations.
+
+  These should be calculated at run-time once in dda_init() if the
+  STEPS_PER_M_* constants are ever replaced with run-time options.
+*/
+static const axes_uint32_t PROGMEM acc_ramp_div_P = {
+  (uint32_t)(((double)7200000 * ACCELERATION) / STEPS_PER_M_X),
+  (uint32_t)(((double)7200000 * ACCELERATION) / STEPS_PER_M_Y),
+  (uint32_t)(((double)7200000 * ACCELERATION) / STEPS_PER_M_Z),
+  (uint32_t)(((double)7200000 * ACCELERATION) / STEPS_PER_M_E)
+};
+
 /*! Acceleration ramp length in steps.
  * \param feedrate Target feedrate of the accelerateion.
- * \param steps_per_m Steps/m of the axis.
+ * \param fast_axis Number of the fastest axis.
  * \return Accelerating steps neccessary to achieve target feedrate.
  *
  * s = 1/2 * a * t^2, v = a * t ==> s = v^2 / (2 * a)
@@ -268,8 +281,7 @@ const uint8_t msbloc (uint32_t v) {
  *       2000 to 4096000 steps/m (and higher). The numbers are a few percent
  *       too high at very low acceleration. Test code see commit message.
  */
-uint32_t acc_ramp_len(uint32_t feedrate, uint32_t steps_per_m) {
-  return (feedrate * feedrate) /
-         (((uint32_t)7200000UL * ACCELERATION) / steps_per_m);
+uint32_t acc_ramp_len(uint32_t feedrate, uint8_t fast_axis) {
+  return (feedrate * feedrate) / pgm_read_dword(&acc_ramp_div_P[fast_axis]);
 }
 
