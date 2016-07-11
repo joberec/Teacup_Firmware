@@ -14,13 +14,6 @@
 #error MAX_JERK_Y, MAX_JERK_Z or MAX_JERK_E while LOOKAHEAD is enabled!
 #endif
 
-// Sanity: the acceleration of Teacup is not implemented properly; as such we can only
-// do move joining when all axis use the same steps per mm. This is usually not an issue
-// for X and Y.
-#if STEPS_PER_M_X != STEPS_PER_M_Y
-#error "Look-ahead requires steps per m to be identical on the X and Y axis (for now)"
-#endif
-
 // This is the same to ACCELERATE_RAMP_LEN but now the steps per m can be switched.
 // Note: use this with a macro so the float is removed by the preprocessor
 #define ACCELERATE_RAMP_SCALER(spm) (uint32_t)((7200000.0f * ACCELERATION) / (float)spm)

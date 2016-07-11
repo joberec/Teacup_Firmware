@@ -164,14 +164,14 @@ void dda_join_moves(DDA *prev, DDA *current) {
   // the previous move, we need to locally store any values and write them
   // when we are done (and the previous move is not already active).
   uint32_t prev_F, prev_F_in_steps, prev_F_start_in_steps, prev_F_end_in_steps;
-  uint32_t prev_rampup, prev_rampdown, prev_total_steps;
+  uint32_t prev_rampup, prev_rampdown, prev_total_steps, prev_fast_axis;
   uint32_t crossF, crossF_in_steps;
   uint8_t prev_id;
   // Similarly, we only want to modify the current move if we have the results of the calculations;
   // until then, we do not want to touch the current move settings.
   // Note: we assume 'current' will not be dispatched while this function runs, so we do not to
   // back up the move settings: they will remain constant.
-  uint32_t this_F, this_F_in_steps, this_F_start_in_steps, this_rampup, this_rampdown, this_total_steps;
+  uint32_t this_F, this_F_in_steps, this_F_start_in_steps, this_rampup, this_rampdown, this_total_steps, this_fast_axis;
   uint8_t this_id;
   static uint32_t la_cnt = 0;     // Counter: how many moves did we join?
   #ifdef LOOKAHEAD_DEBUG
@@ -198,10 +198,12 @@ void dda_join_moves(DDA *prev, DDA *current) {
       prev_rampup = prev->rampup_steps;
       prev_rampdown = prev->rampdown_steps;
       prev_total_steps = prev->total_steps;
+      prev_fast_axis = prev->fast_axis;
       crossF = current->crossF;
       this_id = current->id;
       this_F = current->endpoint.F;
       this_total_steps = current->total_steps;
+      this_fast_axis = current->fast_axis;
     ATOMIC_END
 
     // Here we have to distinguish between feedrate along the movement
@@ -216,10 +218,9 @@ void dda_join_moves(DDA *prev, DDA *current) {
     this_F = muldiv(current->fast_um, current->endpoint.F, current->distance);
     crossF = muldiv(current->fast_um, crossF, current->distance);
 
-    // TODO: calculate the steps from the fastest axis and not from X.
-    prev_F_in_steps = ACCELERATE_RAMP_LEN(prev_F);
-    this_F_in_steps = ACCELERATE_RAMP_LEN(this_F);
-    crossF_in_steps = ACCELERATE_RAMP_LEN(crossF);
+    prev_F_in_steps = acc_ramp_len(prev_F, this_fast_axis);
+    this_F_in_steps = acc_ramp_len(this_F, this_fast_axis);
+    crossF_in_steps = acc_ramp_len(crossF, this_fast_axis);
 
     // Show the proposed crossing speed - this might get adjusted below
     if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
