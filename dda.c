@@ -362,58 +362,59 @@ void dda_create(DDA *dda, const TARGET *target) {
     }
 
 		#ifdef ACCELERATION_REPRAP
-		// c is initial step time in IOclk ticks
-    dda->c = move_duration / startpoint.F;
-    if (dda->c < c_limit)
-      dda->c = c_limit;
-    dda->end_c = move_duration / dda->endpoint.F;
-    if (dda->end_c < c_limit)
-      dda->end_c = c_limit;
+  		// c is initial step time in IOclk ticks
+      dda->c = move_duration / startpoint.F;
+      if (dda->c < c_limit)
+        dda->c = c_limit;
+      dda->end_c = move_duration / dda->endpoint.F;
+      if (dda->end_c < c_limit)
+        dda->end_c = c_limit;
 
-		if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
-      sersendf_P(PSTR(",md:%lu,c:%lu"), move_duration, dda->c);
+  		if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
+        sersendf_P(PSTR(",md:%lu,c:%lu"), move_duration, dda->c);
 
-    if (dda->c != dda->end_c) {
-			uint32_t stF = startpoint.F / 4;
-			uint32_t enF = dda->endpoint.F / 4;
-			// now some constant acceleration stuff, courtesy of http://www.embedded.com/design/mcus-processors-and-socs/4006438/Generate-stepper-motor-speed-profiles-in-real-time
-			uint32_t ssq = (stF * stF);
-			uint32_t esq = (enF * enF);
-			int32_t dsq = (int32_t) (esq - ssq) / 4;
+      if (dda->c != dda->end_c) {
+  			uint32_t stF = startpoint.F / 4;
+  			uint32_t enF = dda->endpoint.F / 4;
+  			// now some constant acceleration stuff, courtesy of http://www.embedded.com/design/mcus-processors-and-socs/4006438/Generate-stepper-motor-speed-profiles-in-real-time
+  			uint32_t ssq = (stF * stF);
+  			uint32_t esq = (enF * enF);
+  			int32_t dsq = (int32_t) (esq - ssq) / 4;
 
-			uint8_t msb_ssq = msbloc(ssq);
-			uint8_t msb_tot = msbloc(dda->total_steps);
+  			uint8_t msb_ssq = msbloc(ssq);
+  			uint8_t msb_tot = msbloc(dda->total_steps);
 
-			// the raw equation WILL overflow at high step rates, but 64 bit math routines take waay too much space
-			// at 65536 mm/min (1092mm/s), ssq/esq overflows, and dsq is also close to overflowing if esq/ssq is small
-			// but if ssq-esq is small, ssq/dsq is only a few bits
-			// we'll have to do it a few different ways depending on the msb locations of each
-			if ((msb_tot + msb_ssq) <= 30) {
-				// we have room to do all the multiplies first
-				if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
-					serial_writechar('A');
-				dda->n = ((int32_t) (dda->total_steps * ssq) / dsq) + 1;
-			}
-			else if (msb_tot >= msb_ssq) {
-				// total steps has more precision
-				if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
-					serial_writechar('B');
-				dda->n = (((int32_t) dda->total_steps / dsq) * (int32_t) ssq) + 1;
-			}
-			else {
-				// otherwise
-				if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
-					serial_writechar('C');
-				dda->n = (((int32_t) ssq / dsq) * (int32_t) dda->total_steps) + 1;
-			}
+  			// the raw equation WILL overflow at high step rates, but 64 bit math routines take waay too much space
+  			// at 65536 mm/min (1092mm/s), ssq/esq overflows, and dsq is also close to overflowing if esq/ssq is small
+  			// but if ssq-esq is small, ssq/dsq is only a few bits
+  			// we'll have to do it a few different ways depending on the msb locations of each
+  			if ((msb_tot + msb_ssq) <= 30) {
+  				// we have room to do all the multiplies first
+  				if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
+  					serial_writechar('A');
+  				dda->n = ((int32_t) (dda->total_steps * ssq) / dsq) + 1;
+  			}
+  			else if (msb_tot >= msb_ssq) {
+  				// total steps has more precision
+  				if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
+  					serial_writechar('B');
+  				dda->n = (((int32_t) dda->total_steps / dsq) * (int32_t) ssq) + 1;
+  			}
+  			else {
+  				// otherwise
+  				if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
+  					serial_writechar('C');
+  				dda->n = (((int32_t) ssq / dsq) * (int32_t) dda->total_steps) + 1;
+  			}
 
-			if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
-        sersendf_P(PSTR("\n{DDA:CA end_c:%lu, n:%ld, md:%lu, ssq:%lu, esq:%lu, dsq:%lu, msbssq:%u, msbtot:%u}\n"), dda->end_c, dda->n, move_duration, ssq, esq, dsq, msb_ssq, msb_tot);
+  			if (DEBUG_DDA && (debug_flags & DEBUG_DDA))
+          sersendf_P(PSTR("\n{DDA:CA end_c:%lu, n:%ld, md:%lu, ssq:%lu, esq:%lu, dsq:%lu, msbssq:%u, msbtot:%u}\n"), dda->end_c, dda->n, move_duration, ssq, esq, dsq, msb_ssq, msb_tot);
 
-			dda->accel = 1;
-		}
-		else
-			dda->accel = 0;
+  			dda->accel = 1;
+  		}
+  		else
+  			dda->accel = 0;
+
 		#elif defined ACCELERATION_RAMPING
       dda->c_min = move_duration / dda->endpoint.F;
       if (dda->c_min < c_limit) {
@@ -574,40 +575,40 @@ void dda_start(DDA *dda) {
 */
 void dda_step(DDA *dda) {
 
-#if ! defined ACCELERATION_TEMPORAL
-  if (move_state.steps[X]) {
-    move_state.counter[X] -= dda->delta[X];
-    if (move_state.counter[X] < 0) {
-			x_step();
-      move_state.steps[X]--;
-      move_state.counter[X] += dda->total_steps;
-		}
-	}
-  if (move_state.steps[Y]) {
-    move_state.counter[Y] -= dda->delta[Y];
-    if (move_state.counter[Y] < 0) {
-			y_step();
-      move_state.steps[Y]--;
-      move_state.counter[Y] += dda->total_steps;
-		}
-	}
-  if (move_state.steps[Z]) {
-    move_state.counter[Z] -= dda->delta[Z];
-    if (move_state.counter[Z] < 0) {
-			z_step();
-      move_state.steps[Z]--;
-      move_state.counter[Z] += dda->total_steps;
-		}
-	}
-  if (move_state.steps[E]) {
-    move_state.counter[E] -= dda->delta[E];
-    if (move_state.counter[E] < 0) {
-			e_step();
-      move_state.steps[E]--;
-      move_state.counter[E] += dda->total_steps;
-		}
-	}
-#endif
+  #if ! defined ACCELERATION_TEMPORAL
+    if (move_state.steps[X]) {
+      move_state.counter[X] -= dda->delta[X];
+      if (move_state.counter[X] < 0) {
+  			x_step();
+        move_state.steps[X]--;
+        move_state.counter[X] += dda->total_steps;
+  		}
+  	}
+    if (move_state.steps[Y]) {
+      move_state.counter[Y] -= dda->delta[Y];
+      if (move_state.counter[Y] < 0) {
+  			y_step();
+        move_state.steps[Y]--;
+        move_state.counter[Y] += dda->total_steps;
+  		}
+  	}
+    if (move_state.steps[Z]) {
+      move_state.counter[Z] -= dda->delta[Z];
+      if (move_state.counter[Z] < 0) {
+  			z_step();
+        move_state.steps[Z]--;
+        move_state.counter[Z] += dda->total_steps;
+  		}
+  	}
+    if (move_state.steps[E]) {
+      move_state.counter[E] -= dda->delta[E];
+      if (move_state.counter[E] < 0) {
+  			e_step();
+        move_state.steps[E]--;
+        move_state.counter[E] += dda->total_steps;
+  		}
+  	}
+  #endif
 
 	#ifdef ACCELERATION_REPRAP
 		// linear acceleration magic, courtesy of http://www.embedded.com/design/mcus-processors-and-socs/4006438/Generate-stepper-motor-speed-profiles-in-real-time
