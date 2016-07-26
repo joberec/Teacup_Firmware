@@ -318,12 +318,16 @@ void dda_create(DDA *dda, const TARGET *target) {
     #ifdef	ACCELERATION_TEMPORAL
       // bracket part of this equation in an attempt to avoid overflow:
       // 60 * 16 MHz * 5 mm is > 32 bits
+
+      // changed (60 * F_CPU) / (dda->endpoint.F * 1000UL)
+      // to (3 * F_CPU) / (dda->endpoint.F * 50UL)
+      // F_CPU can now reach 1.4GHz instead of 71.5MHz before
       uint32_t move_duration, md_candidate;
 
-      move_duration = distance * ((60 * F_CPU) / (dda->endpoint.F * 1000UL));
+      move_duration = distance * ((3 * F_CPU) / (dda->endpoint.F * 50UL));
       for (i = X; i < AXIS_COUNT; i++) {
-        md_candidate = dda->delta[i] * ((60 * F_CPU) /
-                       (pgm_read_dword(&maximum_feedrate_P[i]) * 1000UL));
+        md_candidate = dda->delta[i] * ((3 * F_CPU) /
+                       (pgm_read_dword(&maximum_feedrate_P[i]) * 50UL));
         if (md_candidate > move_duration)
           move_duration = md_candidate;
       }
