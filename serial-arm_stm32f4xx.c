@@ -103,7 +103,7 @@ void serial_init()
   
     /* Enable the peripheral */
     USART2->CR1 |=  USART_CR1_UE;
-    USART2->DR = 0x01; // send one char to get a complete 'start'
+    // USART2->DR = 0x01; // send one char to get a complete 'start'
 
 }
 

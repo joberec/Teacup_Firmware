@@ -317,15 +317,15 @@ void dda_create(DDA *dda, const TARGET *target) {
     #ifdef	ACCELERATION_TEMPORAL
       // bracket part of this equation in an attempt to avoid overflow:
       // 60 * 16 MHz * 5 mm is > 32 bits
-      uint32_t move_duration, md_candidate;
+      uint32_t move_duration;//, md_candidate;
 
-      move_duration = distance * ((60 * F_CPU) / (dda->endpoint.F * 1000UL));
-      for (i = X; i < AXIS_COUNT; i++) {
-        md_candidate = dda->delta[i] * ((60 * F_CPU) /
-                       (pgm_read_dword(&maximum_feedrate_P[i]) * 1000UL));
-        if (md_candidate > move_duration)
-          move_duration = md_candidate;
-      }
+      move_duration = distance * ((6 * F_CPU) / (dda->endpoint.F * 100UL));
+      // for (i = X; i < AXIS_COUNT; i++) {
+      //   md_candidate = dda->delta[i] * ((6 * F_CPU) /
+      //                  (pgm_read_dword(&maximum_feedrate_P[i]) * 100UL));
+      //   if (md_candidate > move_duration)
+      //     move_duration = md_candidate;
+      // }
 		#else
 			// pre-calculate move speed in millimeter microseconds per step minute for less math in interrupt context
 			// mm (distance) * 60000000 us/min / step (total_steps) = mm.us per step.min
@@ -457,20 +457,48 @@ void dda_create(DDA *dda, const TARGET *target) {
 
 		#elif defined ACCELERATION_TEMPORAL
 			// TODO: calculate acceleration/deceleration for each axis
-      for (i = X; i < AXIS_COUNT; i++) {
-        dda->step_interval[i] = 0xFFFFFFFF;
-        if (dda->delta[i])
-          dda->step_interval[i] = move_duration / dda->delta[i];
-      }
 
-      dda->c = 0xFFFFFFFF;
-      dda->axis_to_step = X; // Safety value
+      dda->axis_to_step = dda->fast_axis;
+
+      dda->rampup_steps =
+        acc_ramp_len(muldiv(dda->fast_um, dda->endpoint.F, distance),
+                     dda->fast_axis);
+
+      if (dda->rampup_steps > dda->total_steps / 2)
+        dda->rampup_steps = dda->total_steps / 2;
+      dda->rampdown_steps = dda->total_steps - dda->rampup_steps;
+      
+      // dda->c = 
+      // dda->c0[dda->fast_axis] =
+      // dda->step_interval[dda->fast_axis] = pgm_read_dword(&c0_P[dda->fast_axis]) * 173 >> 8; // 173 >> 8 ~ 0.676
+      
       for (i = X; i < AXIS_COUNT; i++) {
-        if (dda->step_interval[i] < dda->c) {
-          dda->axis_to_step = i;
-          dda->c = dda->step_interval[i];
+        // dda->c_min[i] = 0xFFFFFFFF;
+        if (dda->delta[i]) {
+          // This is our minimum of dda->c
+          dda->c_min[i] = move_duration / dda->delta[i];
+          // if (i != dda->fast_axis)
+          {
+            // This calculates the first step of the other axis.
+            // The explicid formula is c0 / sqrt(delta/delta_fast)
+            // dda->c0[i] =
+            dda->step_interval[i] = pgm_read_dword(&c0_P[dda->fast_axis]) * int_sqrt(dda->delta[dda->fast_axis]) / 
+                                                                            int_sqrt(dda->delta[i]) * 165 / 250; // 173 >> 8;
+            // sersendf_P(PSTR("c0[%su]: %lu\n"), i, dda->step_interval[i]);
+          }
         }
       }
+
+      dda->c = dda->step_interval[dda->fast_axis];
+      dda->axis_to_step = dda->fast_axis;
+      // dda->c = 0xFFFFFFFF;
+      // dda->axis_to_step = X; // Safety value
+      // for (i = X; i < AXIS_COUNT; i++) {
+      //   if (dda->step_interval[i] < dda->c) {
+      //     dda->axis_to_step = i;
+      //     dda->c = dda->step_interval[i];
+      //   }
+      // }
 
 		#else
       dda->c = move_duration / dda->endpoint.F;
@@ -546,6 +574,8 @@ void dda_start(DDA *dda) {
 		dda->live = 1;
 
 		// set timeout for first step
+    // timer_reset();
+    // x_step();
     timer_set(dda->c, 0);
 	}
 	// else just a speed change, keep dda->live = 0
@@ -670,28 +700,49 @@ void dda_step(DDA *dda) {
     do {
       uint32_t c_candidate;
       enum axis_e i;
+      uint32_t current_fast_step;
 
-      if (dda->axis_to_step == X) {
-        x_step();
-        move_state.steps[X]--;
-        move_state.time[X] += dda->step_interval[X];
+      uint8_t axis_to_step;
+
+      axis_to_step = dda->axis_to_step;
+
+      switch (axis_to_step) {
+        case X:
+          x_step();
+          break;
+        case Y:
+          y_step();
+          break;
+        case Z:
+          z_step();
+          break;
+        case E:
+          e_step();
+          break;
       }
-      if (dda->axis_to_step == Y) {
-        y_step();
-        move_state.steps[Y]--;
-        move_state.time[Y] += dda->step_interval[Y];
+
+      move_state.time[axis_to_step] += dda->step_interval[axis_to_step];
+      move_state.steps[axis_to_step]--;
+
+      current_fast_step = dda->total_steps - move_state.steps[dda->fast_axis];
+
+      if (current_fast_step <= dda->rampup_steps) {
+        // accelerating
+        dda->step_interval[axis_to_step] = dda->step_interval[axis_to_step] - (dda->step_interval[axis_to_step] * 2) \
+                                                                            / ((4 * (dda->delta[axis_to_step] - move_state.steps[axis_to_step])) + 1);
       }
-      if (dda->axis_to_step == Z) {
-        z_step();
-        move_state.steps[Z]--;
-        move_state.time[Z] += dda->step_interval[Z];
+      else if (current_fast_step >=(dda->rampdown_steps)) {
+        // decelerating
+        dda->step_interval[axis_to_step] = dda->step_interval[axis_to_step] + (dda->step_interval[axis_to_step] * 2) \
+                                                                            / ((4 * move_state.steps[axis_to_step]) + 1);
       }
-      if (dda->axis_to_step == E) {
-        e_step();
-        move_state.steps[E]--;
-        move_state.time[E] += dda->step_interval[E];
+      else {
+        // traveling
+        dda->step_interval[axis_to_step] = dda->c_min[axis_to_step];
       }
-      unstep();
+
+      if (dda->step_interval[axis_to_step] < dda->c_min[axis_to_step])
+        dda->step_interval[axis_to_step] = dda->c_min[axis_to_step];
 
       // Find the next stepper to step.
       dda->c = 0xFFFFFFFF;
@@ -705,6 +756,8 @@ void dda_step(DDA *dda) {
           }
         }
       }
+
+      unstep();
 
       // No stepper to step found? Then we're done.
       if (dda->c == 0xFFFFFFFF) {

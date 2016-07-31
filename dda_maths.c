@@ -282,6 +282,6 @@ const axes_uint32_t PROGMEM acc_ramp_div_P = {
  *       too high at very low acceleration. Test code see commit message.
  */
 uint32_t acc_ramp_len(uint32_t feedrate, uint8_t fast_axis) {
-  return feedrate * feedrate / acc_ramp_div_P[fast_axis];
+  return feedrate * feedrate / pgm_read_dword(&acc_ramp_div_P[fast_axis]);
 }
 
