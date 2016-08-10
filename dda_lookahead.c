@@ -21,8 +21,6 @@
 #include "pinio.h"
 #include "memory_barrier.h"
 
-extern uint8_t use_lookahead;
-
 #ifdef DEBUG
 uint32_t lookahead_joined = 0;      // Total number of moves joined together
 uint32_t lookahead_timeout = 0;     // Moves that did not compute in time to be actually joined
